@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 from tensorflow.keras.models import load_model
 from tensorflow.keras.preprocessing.image import img_to_array
-from collections import Counter
+from collections import defaultdict, Counter
 
 # Yüz tanıma için OpenCV'nin hazır modelini yükle
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -11,11 +11,17 @@ face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_fronta
 emotion_model = load_model('FER_model.h5')
 
 # Videoyu yükle
-cap = cv2.VideoCapture('emotion.mp4')
+cap = cv2.VideoCapture('25snemotion.mp4')
 
-# Duyguların kaydedildiği sözlük
-emotions_dict = {}
+# Teşhis süresini ayarla (örneğin, her 10 saniyede bir)
+diagnosis_interval = 10  # saniye
+fps = cap.get(cv2.CAP_PROP_FPS)  # Saniye başına düşen frame sayısı
+frames_per_interval = int(fps * diagnosis_interval)
 
+# Duyguların kaydedildiği yapı
+emotions_dict = defaultdict(list)
+
+current_frame = 0
 while True:
     # Video'dan bir frame al
     ret, frame = cap.read()
@@ -27,7 +33,6 @@ while True:
 
     # Yüzleri tespit et
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-    frame_number = cap.get(cv2.CAP_PROP_POS_FRAMES)  # Mevcut frame numarası
 
     for (x, y, w, h) in faces:
         # Yüz bölgesini kes
@@ -47,9 +52,8 @@ while True:
         cv2.putText(frame, predicted_emotion, (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0), 2)
 
         # Duygu kaydı
-        if frame_number not in emotions_dict:
-            emotions_dict[frame_number] = []
-        emotions_dict[frame_number].append(predicted_emotion)
+        interval = current_frame // frames_per_interval
+        emotions_dict[interval].append(predicted_emotion)
 
     # Videonun işlenmiş halini göster
     cv2.imshow('Emotion Detector', frame)
@@ -57,23 +61,15 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+    current_frame += 1
+
 # Kaynakları serbest bırak
 cap.release()
 cv2.destroyAllWindows()
 
-# Duygu analizi sonuçları
-all_emotions = [emotion for frame_emotions in emotions_dict.values() for emotion in frame_emotions]
-emotion_counts = Counter(all_emotions)
-
-print("Duygu Sıklığı Analizi:")
-print(emotion_counts)
-
-# Duygusal Süreklilik Analizi
-most_common_emotion, freq = emotion_counts.most_common(1)[0]
-print(f"En sık rastlanan duygu: {most_common_emotion} ({freq} kez)")
-
-# Duygu Sürekliliği
-continuity_threshold = 5  # Bu eşik değer altında sürekli duygular
-continuous_emotions = {emotion: count for emotion, count in emotion_counts.items() if count > continuity_threshold}
-print("Sürekli Gözlenen Duygular:")
-print(continuous_emotions)
+# Duygu analizi sonuçlarını analiz et ve sun
+for interval, emotions in emotions_dict.items():
+    emotion_count = Counter(emotions)
+    print(f"Zaman Aralığı {interval * diagnosis_interval} - {(interval + 1) * diagnosis_interval} saniye:")
+    print(emotion_count)
+    print("\n")
