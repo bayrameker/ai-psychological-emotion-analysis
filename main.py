@@ -6,6 +6,8 @@ from collections import defaultdict, Counter
 
 from lib.face_detection import load_face_detector, detect_faces
 from lib.emotion_recognition import load_emotion_model, predict_emotion
+from lib.body_pose_estimation import load_pose_model, estimate_pose, draw_keypoints, analyze_pose
+
 
 def main():
     cap = cv2.VideoCapture('data/video/25snemotion.mp4')
@@ -24,11 +26,22 @@ def main():
     emotions_dict = defaultdict(list)
     current_frame = 0
 
+    pose_model = load_pose_model()
+
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
+        # Pose estimation ve keypoints çizimi
+        keypoints = estimate_pose(pose_model, frame)
+        if keypoints is not None and len(keypoints) > 0:  # Keypoints kontrolü
+            draw_keypoints(frame, keypoints)
+            pose_analysis = analyze_pose(keypoints)  # Pose analizi yapılıyor
+        else:
+            pose_analysis = "Keypoints yetersiz"  # Keypoints yetersizse alternatif metin
+
+        # Yüz tanıma ve duygu analizi
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         faces = detect_faces(face_cascade, gray)
 
@@ -42,19 +55,25 @@ def main():
             predicted_emotion = label_map[emotion_label]
             draw.text((x, max(0, y - 10)), predicted_emotion, font=font, fill=(0, 255, 0))
 
-            interval = current_frame // frames_per_interval
-            emotions_dict[interval].append(predicted_emotion)
+        interval = current_frame // frames_per_interval
+        emotions_dict[interval].append(predicted_emotion)
+
+        # Pose analysis sonucunu ekleyin
+        if pose_analysis:  # pose_analysis'in geçerli bir değere sahip olduğundan emin olun
+            draw.text((10, 30), pose_analysis, font=font, fill=(255, 0, 0))
 
         frame_with_text = cv2.cvtColor(np.array(frame_pil), cv2.COLOR_RGB2BGR)
-        cv2.imshow('Emotion Detector', frame_with_text)
+        cv2.imshow('Emotion and Pose Detector', frame_with_text)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
         current_frame += 1
 
+
     cap.release()
     cv2.destroyAllWindows()
+
 
     # Analyze and present emotion analysis results
     for interval, emotions in emotions_dict.items():
