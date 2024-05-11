@@ -67,4 +67,3 @@ Contributions to improve the project are welcome. Please fork the repository and
 
 Specify your license or state that the project is open-source.
 
-.
